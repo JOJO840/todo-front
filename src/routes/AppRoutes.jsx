@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import Login from '../components/Login';
 import Dashboard from '../components/Dashboard';
 import Task from '../components/Task';
+import User from '../components/User';
 import NotFound from "../components/NotFound";
 import RoleProtectedRoute from "./RoleProtectedRoute.jsx";
 
@@ -19,6 +20,16 @@ const AppRoutes = () => {
                 <Route path="/dashboard" element={
                     <RoleProtectedRoute requiredRoles={['ROLE_ADMIN']}>
                         <Dashboard />
+                    </RoleProtectedRoute>
+                } />
+            )}
+
+
+            {/* Users route - only for admin */}
+            {hasRole('ROLE_ADMIN') && (
+                <Route path="/dashboard/users" element={
+                    <RoleProtectedRoute requiredRoles={['ROLE_ADMIN']}>
+                        <User />
                     </RoleProtectedRoute>
                 } />
             )}
