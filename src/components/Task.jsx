@@ -9,6 +9,12 @@ export default function Task() {
   const [tasks, setTasks] = useState([]);
   const [statusFilter, setStatusFilter] = useState("all"); // <-- NEW
   const fileInputRef = useRef(null);
+  const [editId, setEditId] = useState(null);
+  const [editForm, setEditForm] = useState({
+    title: "",
+    description: "",
+    dueDate: "",
+  });
 
   const [form, setForm] = useState({
     title: "",
@@ -101,6 +107,42 @@ export default function Task() {
     } catch (e) {
       console.error("Toggle complete failed:", e);
       alert(e.message || "Failed to update task status");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const startEdit = (t) => {
+    setEditId(t.id);
+    setEditForm({
+      title: t.title ?? "",
+      description: t.description ?? "",
+      // make it "YYYY-MM-DDTHH:mm" for <input type="datetime-local">
+      dueDate: t.dueDate ? new Date(t.dueDate).toISOString().slice(0, 16) : "",
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditId(null);
+    setEditForm({ title: "", description: "", dueDate: "" });
+  };
+
+  const saveEdit = async () => {
+    try {
+      setLoading(true);
+      await taskService.update(editId, {
+        title: editForm.title.trim(),
+        description: editForm.description.trim(),
+        dueDate: editForm.dueDate ? new Date(editForm.dueDate) : null,
+        // keep existing completed flag
+        completed: tasks.find((x) => x.id === editId)?.completed ?? false,
+      });
+      const data = await taskService.getAll();
+      setTasks(data || []);
+      cancelEdit();
+    } catch (e) {
+      console.error("Update failed:", e);
+      alert(e.message || "Failed to update task");
     } finally {
       setLoading(false);
     }
@@ -290,40 +332,86 @@ export default function Task() {
                       <div className="d-flex w-100 justify-content-between align-items-start">
                         <div className="flex-grow-1">
                           <div className="d-flex justify-content-between">
-                            <h6 className="mb-1">{t.title}</h6>
-                            {/* createdAt/dueDate fields may differ in your DTO */}
+                            {editId === t.id ? (
+                              <input
+                                className="form-control form-control-sm me-3"
+                                placeholder="Title"
+                                value={editForm.title}
+                                onChange={(e) =>
+                                  setEditForm((f) => ({
+                                    ...f,
+                                    title: e.target.value,
+                                  }))
+                                }
+                              />
+                            ) : (
+                              <h6 className="mb-1">{t.title}</h6>
+                            )}
+
                             {t.createdAt && (
                               <small className="text-muted ms-2">
                                 Created: {String(t.createdAt).slice(0, 10)}
                               </small>
                             )}
                           </div>
-                          {t.description && (
-                            <p className="mb-1 text-muted small">
-                              {t.description}
-                            </p>
+
+                          {editId === t.id ? (
+                            <>
+                              <textarea
+                                className="form-control form-control-sm my-2"
+                                rows={2}
+                                placeholder="Description"
+                                value={editForm.description}
+                                onChange={(e) =>
+                                  setEditForm((f) => ({
+                                    ...f,
+                                    description: e.target.value,
+                                  }))
+                                }
+                              />
+                              <input
+                                type="datetime-local"
+                                className="form-control form-control-sm"
+                                value={editForm.dueDate}
+                                onChange={(e) =>
+                                  setEditForm((f) => ({
+                                    ...f,
+                                    dueDate: e.target.value,
+                                  }))
+                                }
+                              />
+                            </>
+                          ) : (
+                            <>
+                              {t.description && (
+                                <p className="mb-1 text-muted small">
+                                  {t.description}
+                                </p>
+                              )}
+                              <div className="d-flex align-items-center flex-wrap">
+                                {t.dueDate && (
+                                  <small className="text-muted me-2">
+                                    <i className="bi bi-calendar-event" /> Due:{" "}
+                                    {String(t.dueDate).slice(0, 10)}
+                                  </small>
+                                )}
+                                {t.assignee && (
+                                  <span className="badge rounded-pill bg-info-subtle text-info-emphasis me-2">
+                                    {t.assignee.name || t.assignee.username}
+                                  </span>
+                                )}
+                                {t.status && (
+                                  <span className="badge bg-warning text-dark me-2">
+                                    {t.status}
+                                  </span>
+                                )}
+                              </div>
+                            </>
                           )}
-                          <div className="d-flex align-items-center flex-wrap">
-                            {t.dueDate && (
-                              <small className="text-muted me-2">
-                                <i className="bi bi-calendar-event" /> Due:{" "}
-                                {String(t.dueDate).slice(0, 10)}
-                              </small>
-                            )}
-                            {t.assignee && (
-                              <span className="badge rounded-pill bg-info-subtle text-info-emphasis me-2">
-                                {t.assignee.name || t.assignee.username}
-                              </span>
-                            )}
-                            {t.status && (
-                              <span className="badge bg-warning text-dark me-2">
-                                {t.status}
-                              </span>
-                            )}
-                          </div>
                         </div>
 
                         <div className="btn-group ms-3">
+                          {/* Toggle complete */}
                           <button
                             className={`btn btn-outline-${
                               t.completed ? "secondary" : "success"
@@ -338,6 +426,34 @@ export default function Task() {
                             {t.completed ? "↺" : "✓"}
                           </button>
 
+                          {editId === t.id ? (
+                            <>
+                              <button
+                                className="btn btn-primary btn-sm"
+                                title="Save"
+                                onClick={saveEdit}
+                              >
+                                Save
+                              </button>
+                              <button
+                                className="btn btn-outline-secondary btn-sm"
+                                title="Cancel"
+                                onClick={cancelEdit}
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              className="btn btn-outline-primary btn-sm"
+                              title="Edit"
+                              onClick={() => startEdit(t)}
+                            >
+                              Edit
+                            </button>
+                          )}
+
+                          {/* Delete */}
                           <button
                             className="btn btn-outline-danger btn-sm"
                             title="Delete"
